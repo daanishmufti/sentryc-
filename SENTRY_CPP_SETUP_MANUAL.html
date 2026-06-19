@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sentry + C++ (MinGW/CMake) Setup Manual</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: "Segoe UI", Roboto, system-ui, sans-serif;
+    font-size: 10.5pt; line-height: 1.5; color: #1c2330; margin: 0;
+  }
+  h1, h2, h3, h4 { color: #15233b; line-height: 1.25; }
+  h1 { font-size: 22pt; margin: 0 0 4pt; }
+  h2 { font-size: 15pt; margin: 22pt 0 6pt; border-bottom: 2px solid #6d5ef0; padding-bottom: 4pt; }
+  h3 { font-size: 12pt; margin: 14pt 0 4pt; color: #2c3a55; }
+  h4 { font-size: 10.5pt; margin: 10pt 0 2pt; color: #46506b; }
+  p { margin: 5pt 0; }
+  ul, ol { margin: 5pt 0 5pt 0; padding-left: 20pt; }
+  li { margin: 2.5pt 0; }
+  code { font-family: "Cascadia Mono", Consolas, "Courier New", monospace; font-size: 9pt;
+         background: #eef0fb; color: #29306b; padding: 1px 4px; border-radius: 3px; }
+  pre { background: #11141d; color: #e6e9f5; font-family: "Cascadia Mono", Consolas, monospace;
+        font-size: 8.6pt; line-height: 1.45; padding: 9pt 11pt; border-radius: 6px;
+        overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+        border-left: 4px solid #6d5ef0; page-break-inside: avoid; margin: 6pt 0; }
+  pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+  .cmt { color: #7f8aa6; }
+  .kw  { color: #c792ea; }
+  .str { color: #c3e88d; }
+  .fn  { color: #82aaff; }
+  table { border-collapse: collapse; width: 100%; margin: 8pt 0; page-break-inside: avoid; font-size: 9pt; }
+  th, td { border: 1px solid #c9cfe0; padding: 5pt 7pt; text-align: left; vertical-align: top; }
+  th { background: #6d5ef0; color: #fff; font-weight: 600; }
+  tr:nth-child(even) td { background: #f3f4fc; }
+  .note  { background: #eef6ff; border-left: 4px solid #2f80ed; padding: 7pt 11pt; border-radius: 4px; margin: 7pt 0; page-break-inside: avoid; }
+  .warn  { background: #fff5ec; border-left: 4px solid #f2994a; padding: 7pt 11pt; border-radius: 4px; margin: 7pt 0; page-break-inside: avoid; }
+  .crit  { background: #fdeef0; border-left: 4px solid #eb5757; padding: 7pt 11pt; border-radius: 4px; margin: 7pt 0; page-break-inside: avoid; }
+  .ok    { background: #edfaf0; border-left: 4px solid #27ae60; padding: 7pt 11pt; border-radius: 4px; margin: 7pt 0; page-break-inside: avoid; }
+  .tag { display:inline-block; font-size:7.5pt; font-weight:700; letter-spacing:.4pt; text-transform:uppercase;
+         padding:1px 6px; border-radius:999px; background:#6d5ef0; color:#fff; vertical-align: middle; }
+  .cover { height: 247mm; display: flex; flex-direction: column; justify-content: center;
+           page-break-after: always; }
+  .cover .kicker { color:#6d5ef0; font-weight:700; letter-spacing:2pt; text-transform:uppercase; font-size:10pt; }
+  .cover h1 { font-size: 30pt; margin: 8pt 0; }
+  .cover .sub { font-size: 13pt; color:#46506b; max-width: 150mm; }
+  .cover .meta { margin-top: 26pt; font-size: 9.5pt; color:#5b6478; }
+  .cover .meta b { color:#2c3a55; }
+  .toc { page-break-after: always; }
+  .toc ol { font-size: 10.5pt; }
+  .toc a { color:#29306b; text-decoration: none; }
+  .small { font-size: 8.6pt; color:#5b6478; }
+  hr { border:none; border-top:1px solid #d6dae8; margin: 10pt 0; }
+  .kbd { font-family: monospace; background:#e6e9f5; border:1px solid #c2c8de; border-bottom-width:2px;
+         border-radius:4px; padding:0 4px; font-size:8.5pt; }
+</style>
+</head>
+<body>
+
+<!-- ============================ COVER ============================ -->
+<section class="cover">
+  <div class="kicker">Engineering Runbook</div>
+  <h1>Integrating Sentry into a<br>C++ Project on Windows</h1>
+  <div class="sub">A complete, replicable setup: native crash &amp; error reporting, symbolicated
+  stack traces with source context, automatic debug-symbol upload, and browser Session Replay —
+  using CMake, MinGW-w64, the Sentry Native SDK, and sentry-cli.</div>
+  <div class="meta">
+    <p><b>Reference project:</b> <code>sentryc++</code> — a from-scratch C++17 HTTP server.</p>
+    <p><b>Toolchain used:</b> MinGW-w64 g++ 16.1.0 · CMake 3.31 · Sentry Native SDK 0.15.0 ·
+       sentry-cli 2.x · Sentry Browser SDK 8.9.0</p>
+    <p><b>Platform:</b> Windows 11 (x86_64)</p>
+    <p class="small">Replace all project-specific values (DSN, org slug, project id, auth token,
+       release name) with your own when applying this to a new project.</p>
+  </div>
+</section>
+
+<!-- ============================ TOC ============================ -->
+<section class="toc">
+  <h2 style="border:none;margin-top:0">Contents</h2>
+  <ol>
+    <li>Overview &amp; mental model</li>
+    <li>Prerequisites &amp; toolchain</li>
+    <li>Step 1 — Build the Sentry Native SDK</li>
+    <li>Step 2 — Wire Sentry into your CMake build</li>
+    <li>Step 3 — Initialise Sentry in code</li>
+    <li>Step 4 — Capturing errors (3 modes)</li>
+    <li>Step 5 — Upload debug symbols (the make-or-break step)</li>
+    <li>Step 6 — Session Replay (the "video")</li>
+    <li>Step 7 — Verify end-to-end</li>
+    <li>Troubleshooting matrix (the gotchas)</li>
+    <li>Security &amp; housekeeping</li>
+    <li>Optional — link stack frames to your GitHub repo</li>
+    <li>Appendix A — command cheat sheet</li>
+    <li>Appendix B — final file listings</li>
+  </ol>
+</section>
+
+<!-- ============================ 1 ============================ -->
+<h2>1 · Overview &amp; mental model</h2>
+<p>Sentry for C++ has <b>two independent halves</b>. Getting "the full experience" means setting up both:</p>
+<table>
+  <tr><th>Half</th><th>SDK</th><th>Gives you</th><th>Runs in</th></tr>
+  <tr><td>Backend</td><td>Sentry <b>Native</b> SDK (<code>libsentry</code>)</td>
+      <td>Native crash capture (access violations, aborts), caught-exception reporting,
+          manual events, symbolicated stack traces</td><td>Your compiled <code>.exe</code></td></tr>
+  <tr><td>Frontend</td><td>Sentry <b>Browser</b> SDK (JavaScript)</td>
+      <td>Session Replay ("video"), browser error capture, distributed tracing</td>
+      <td>The web page served to the browser</td></tr>
+</table>
+
+<div class="crit"><b>The single most important concept:</b> Sentry <b>symbolicates stack traces on its
+servers</b>, not on your machine. The raw crash event only contains memory addresses + a
+<i>debug-id</i>. To turn those addresses into <code>file:line</code> and show your source code, Sentry
+must already hold the <b>debug-information file</b> (and source bundle) whose debug-id matches the exact
+binary that crashed. <b>If you never upload them, you get blank/garbage traces.</b> This is the step
+everyone misses.</div>
+
+<p>Three facts that follow from this, and that cost the most time to learn:</p>
+<ul>
+  <li><b>Re-upload after <i>every</i> rebuild.</b> Each build produces a new debug-id; an old upload won't match.</li>
+  <li><b>Build with <code>-g</code> and <code>-O0</code>.</b> No debug info → nothing to symbolicate. Optimization → wrong line numbers.</li>
+  <li><b>A message event has no stack trace unless you attach one.</b> Logging a string does not record "where".</li>
+</ul>
+
+<!-- ============================ 2 ============================ -->
+<h2>2 · Prerequisites &amp; toolchain</h2>
+<table>
+  <tr><th>Tool</th><th>Why</th><th>Notes / version used here</th></tr>
+  <tr><td>MinGW-w64 (<code>g++</code>)</td><td>Compiler + linker</td>
+      <td>g++ 16.1.0 at <code>C:\mingw64\bin</code>. Use a 64-bit build; keep <b>one</b> MinGW on PATH to avoid ABI mismatch.</td></tr>
+  <tr><td>CMake ≥ 3.14</td><td>Build system</td><td>3.31 used. Generator: <code>MinGW Makefiles</code>.</td></tr>
+  <tr><td>Node.js</td><td>Runs <code>npx @sentry/cli</code></td><td>So you don't have to install sentry-cli globally.</td></tr>
+  <tr><td>Sentry account + project</td><td>Provides the DSN &amp; receives events</td><td>Create a project of platform <i>Native (C/C++)</i>.</td></tr>
+  <tr><td><code>sentry-native</code> source</td><td>The SDK you compile &amp; link</td><td><code>github.com/getsentry/sentry-native</code> (vendor it into your repo).</td></tr>
+  <tr><td>A Chromium browser</td><td>Session Replay + viewing</td><td>Edge/Chrome. Disable ad-blockers for localhost or replays get blocked.</td></tr>
+</table>
+
+<h3>Values you will need (record yours)</h3>
+<table>
+  <tr><th>Value</th><th>Where it comes from</th><th>Example (this project)</th></tr>
+  <tr><td>DSN</td><td>Sentry → Project → Settings → Client Keys</td><td><code>https://&lt;key&gt;@o&lt;org-id&gt;.ingest.us.sentry.io/&lt;project-id&gt;</code></td></tr>
+  <tr><td>Org slug</td><td>Sentry URL / org settings</td><td><code>daanish</code></td></tr>
+  <tr><td>Project id (numeric)</td><td>Last path segment of the DSN</td><td><code>4511585577992192</code></td></tr>
+  <tr><td>Auth token</td><td>Sentry → Settings → Auth Tokens (org token)</td><td>scope <code>org:ci</code> — <b>keep secret</b></td></tr>
+  <tr><td>Release name</td><td>You choose; set in code</td><td><code>my-project-name@2.3.12</code></td></tr>
+</table>
+
+<!-- ============================ 3 ============================ -->
+<h2>3 · Step 1 — Build the Sentry Native SDK</h2>
+<p>Vendor the SDK into your repo and compile it once. This project used the <b>inproc</b> backend
+(simplest; no extra handler executable) with the default <b>winhttp</b> transport, as a <b>shared</b> library.</p>
+
+<pre><code><span class="cmt"># From your project root — clone WITH submodules (crashpad/breakpad deps)</span>
+git clone --recurse-submodules https://github.com/getsentry/sentry-native.git
+
+<span class="cmt"># Configure + build the SDK (MinGW, inproc backend, shared lib, Release)</span>
+cmake -S sentry-native -B sentry-native/build -G <span class="str">"MinGW Makefiles"</span> ^
+      -DCMAKE_BUILD_TYPE=Release ^
+      -DSENTRY_BACKEND=inproc ^
+      -DSENTRY_BUILD_SHARED_LIBS=ON
+cmake --build sentry-native/build --parallel</code></pre>
+
+<h4>Expected outputs (in <code>sentry-native/build/</code>)</h4>
+<ul>
+  <li><code>libsentry.dll</code> — the runtime library (must ship next to your <code>.exe</code>).</li>
+  <li><code>libsentry.dll.a</code> — the import library you link against.</li>
+  <li>Header at <code>sentry-native/include/sentry.h</code>.</li>
+</ul>
+
+<table>
+  <tr><th>Option</th><th>Choices</th><th>Guidance</th></tr>
+  <tr><td><code>SENTRY_BACKEND</code></td><td><code>inproc</code> · <code>crashpad</code> · <code>breakpad</code></td>
+      <td><b>inproc</b> = self-contained, used here. <b>crashpad</b> = most robust on Windows but ships a
+          separate <code>crashpad_handler.exe</code> you must copy next to your app.</td></tr>
+  <tr><td><code>SENTRY_TRANSPORT</code></td><td><code>winhttp</code> (Win default) · <code>curl</code> · <code>none</code></td><td>Leave default on Windows.</td></tr>
+  <tr><td><code>SENTRY_BUILD_SHARED_LIBS</code></td><td><code>ON</code> / <code>OFF</code></td><td><code>ON</code> here → <code>libsentry.dll</code>. <code>OFF</code> gives a static lib (no DLL to ship).</td></tr>
+</table>
+
+<!-- ============================ 4 ============================ -->
+<h2>4 · Step 2 — Wire Sentry into your CMake build</h2>
+<p>Three things: add the include path, add the link directory, link the <code>sentry</code> library — plus the
+<b>critical compile/link flags</b>.</p>
+
+<pre><code><span class="cmt"># Headers + link dir for the SDK you built in Step 1</span>
+include_directories(sentry-native/include)
+link_directories(${CMAKE_SOURCE_DIR}/sentry-native/build)
+
+add_executable(http_server ${SOURCES})
+
+<span class="cmt"># Link the SDK. On Windows also link ws2_32 (winsock used by winhttp/sockets).</span>
+if(WIN32)
+    target_link_libraries(http_server ws2_32 sentry)
+else()
+    find_package(Threads REQUIRED)
+    target_link_libraries(http_server Threads::Threads sentry)
+endif()
+
+<span class="cmt"># CRITICAL FLAGS for usable Sentry traces (GCC/MinGW):</span>
+target_compile_options(http_server PRIVATE -Wall -Wextra -Wpedantic -g -O0)
+target_link_options(http_server PRIVATE -Wl,--build-id)</code></pre>
+
+<div class="crit"><b>Why these flags matter — do not skip:</b>
+<ul style="margin-bottom:0">
+  <li><code>-g</code> — emits DWARF debug info. <b>Without it there is nothing to symbolicate.</b></li>
+  <li><code>-O0</code> — disables optimization so each machine instruction maps to the <b>exact</b> source line.
+      With <code>-O2/-O3</code> the compiler inlines &amp; reorders code, and Sentry highlights the
+      <b>wrong line</b> (e.g. the crash line is misattributed several lines away). The trailing <code>-O0</code>
+      overrides any build-type <code>-O2/-O3</code>.</li>
+  <li><code>-Wl,--build-id</code> — stamps a stable build-id so Sentry can reliably match the uploaded debug file.</li>
+</ul></div>
+
+<h3>Optional: auto-upload symbols on every build</h3>
+<p>Add this block so a successful build also pushes the debug files (Step 5) — opt-in, so normal builds are unaffected.</p>
+<pre><code>option(SENTRY_UPLOAD_SYMBOLS <span class="str">"Upload debug-information files to Sentry after build"</span> OFF)
+
+if(SENTRY_UPLOAD_SYMBOLS)
+    find_program(SENTRY_CLI sentry-cli)
+    if(NOT SENTRY_CLI)
+        message(WARNING <span class="str">"SENTRY_UPLOAD_SYMBOLS=ON but sentry-cli not found; skipping."</span>)
+    else()
+        set(SENTRY_DLL <span class="str">"${CMAKE_SOURCE_DIR}/sentry-native/build/libsentry.dll"</span>)
+        add_custom_command(TARGET http_server POST_BUILD
+            COMMAND ${SENTRY_CLI} debug-files upload --include-sources
+                    <span class="str">"$&lt;TARGET_FILE:http_server&gt;"</span> <span class="str">"${SENTRY_DLL}"</span>
+            COMMENT <span class="str">"Uploading debug-information files to Sentry"</span> VERBATIM)
+    endif()
+endif()</code></pre>
+<p class="small">Enable with <code>cmake -DSENTRY_UPLOAD_SYMBOLS=ON …</code>; reads
+<code>SENTRY_AUTH_TOKEN</code>, <code>SENTRY_ORG</code>, <code>SENTRY_PROJECT</code> from the environment.</p>
+
+<!-- ============================ 5 ============================ -->
+<h2>5 · Step 3 — Initialise Sentry in code</h2>
+<p>One small translation unit (e.g. <code>sentry.cpp</code>) that initialises the SDK, called once at startup.</p>
+<pre><code><span class="cmt">// sentry.cpp</span>
+<span class="kw">#include</span> <span class="str">&lt;sentry.h&gt;</span>
+
+<span class="kw">void</span> <span class="fn">sentry_func</span>(<span class="kw">void</span>) {
+    sentry_options_t *options = sentry_options_new();
+    sentry_options_set_dsn(options, <span class="str">"https://&lt;key&gt;@o&lt;org&gt;.ingest.us.sentry.io/&lt;project&gt;"</span>);
+    sentry_options_set_database_path(options, <span class="str">".sentry-native"</span>); <span class="cmt">// crash DB on disk</span>
+    sentry_options_set_release(options, <span class="str">"my-project-name@2.3.12"</span>);     <span class="cmt">// must match DIF upload</span>
+    sentry_options_set_debug(options, 1);  <span class="cmt">// prints SDK logs to stderr — keep on while wiring up</span>
+    sentry_init(options);
+}</code></pre>
+
+<pre><code><span class="cmt">// main.cpp — bracket your program with init / close</span>
+<span class="kw">int</span> <span class="fn">main</span>() {
+    sentry_func();          <span class="cmt">// start monitoring (installs crash handlers)</span>
+    <span class="cmt">// ... run your application ...</span>
+    sentry_close();         <span class="cmt">// flush queued events &amp; shut down cleanly</span>
+    return 0;
+}</code></pre>
+
+<div class="warn"><b>Runtime requirement:</b> <code>libsentry.dll</code> must sit next to your <code>.exe</code>
+(or be on <code>PATH</code>). If it can't be found, the app fails to start and you get no events at all.</div>
+
+<div class="note"><b>How crashes get delivered (inproc):</b> when the process crashes, the in-process handler
+writes the event into the <code>.sentry-native</code> database and the process exits. The event is uploaded on the
+<b>next launch</b>. So the test loop is: trigger crash → process dies → <b>start the app again</b> → event appears.</div>
+
+<!-- ============================ 6 ============================ -->
+<h2>6 · Step 4 — Capturing errors (three modes)</h2>
+
+<h3>Mode A — Automatic native crashes</h3>
+<p>Once <code>sentry_init</code> has run, hard crashes (access violations, <code>abort</code>) are captured automatically.
+No code needed. Example fault used for testing:</p>
+<pre><code><span class="kw">volatile</span> <span class="kw">int</span>* ptr = <span class="kw">nullptr</span>;
+*ptr = 42;   <span class="cmt">// EXCEPTION_ACCESS_VIOLATION → captured automatically</span></code></pre>
+
+<h3>Mode B — Caught C++ exceptions → proper Error events</h3>
+<p>An <b>exception event</b> carries a <i>type</i> + <i>value</i> and an attached stack trace, so it shows up as a
+first-class error. Capture the stack and attach it:</p>
+<pre><code><span class="kw">void</span> <span class="fn">report_to_sentry</span>(<span class="kw">const char</span>* type, <span class="kw">const char</span>* value) {
+    sentry_value_t event = sentry_value_new_event();
+    sentry_value_t exc   = sentry_value_new_exception(type, value);
+    sentry_value_set_stacktrace(exc, <span class="kw">nullptr</span>, 0);  <span class="cmt">// nullptr =&gt; capture current stack</span>
+    sentry_event_add_exception(event, exc);
+    sentry_capture_event(event);
+}
+<span class="cmt">// usage inside catch:  report_to_sentry(typeid(e).name(), e.what());</span></code></pre>
+
+<h3>Mode C — Manual events (logs / custom errors)</h3>
+<div class="crit"><b>The trap that wasted the most time:</b> <code>sentry_value_new_message_event(...)</code> does
+<b>NOT</b> include a stack trace. A bare message event shows up as <i>"(No error message)"</i> with no frames and
+<b>nothing to symbolicate</b>. You must attach a stack trace yourself.</div>
+
+<p>Modern (non-deprecated) way — build a stacktrace, hang it on a thread (or an exception), add to the event:</p>
+<pre><code><span class="cmt">// Capture the stack BEFORE building the event so it reflects the real call site,</span>
+<span class="cmt">// not the Sentry SDK internals.</span>
+sentry_value_t stack = sentry_value_new_stacktrace(<span class="kw">nullptr</span>, 0);
+
+sentry_value_t event = sentry_value_new_event();
+sentry_value_t exc   = sentry_value_new_exception(<span class="str">"Tog on"</span>, <span class="str">"Toggle switched ON"</span>);
+sentry_value_set_by_key(exc, <span class="str">"stacktrace"</span>, stack);   <span class="cmt">// attach pre-captured stack</span>
+sentry_event_add_exception(event, exc);
+sentry_capture_event(event);</code></pre>
+<p class="small">Attaching to a <i>thread</i> instead: <code>sentry_value_new_thread(id,"main")</code> →
+<code>sentry_value_set_by_key(thread,"stacktrace",stack)</code> → <code>sentry_event_add_thread(event,thread)</code>.
+The older one-liner <code>sentry_event_value_add_stacktrace(event,nullptr,0)</code> still works but is deprecated.</p>
+
+<table>
+  <tr><th>Event kind</th><th>API</th><th>Appears as</th><th>Has trace?</th></tr>
+  <tr><td>Native crash</td><td>automatic</td><td>Fatal / AccessViolation</td><td>Yes (auto)</td></tr>
+  <tr><td>Exception event</td><td><code>new_exception</code> + <code>add_exception</code></td><td>Error w/ type:value</td><td>Yes — if you attach one</td></tr>
+  <tr><td>Message event</td><td><code>new_message_event</code></td><td>Plain message</td><td><b>No</b> unless you attach one</td></tr>
+</table>
+
+<!-- ============================ 7 ============================ -->
+<h2>7 · Step 5 — Upload debug symbols <span class="tag">make-or-break</span></h2>
+<p>This is what turns blank traces into your source code. Do it after every build.</p>
+
+<h4>5.1 — Create an auth token</h4>
+<p>Sentry → <b>Settings → Auth Tokens</b> → create an <b>organization</b> token. Scope <code>org:ci</code> is enough
+to upload (it cannot list/read issues — that's fine).</p>
+
+<h4>5.2 — Run the upload</h4>
+<pre><code><span class="cmt"># Set secrets in the shell (PowerShell shown). Never hard-code the token.</span>
+$env:SENTRY_AUTH_TOKEN = <span class="str">"&lt;YOUR_TOKEN&gt;"</span>
+
+<span class="cmt"># Upload the EXE (+ the SDK DLL) with source context. -p accepts the numeric project id.</span>
+npx --yes @sentry/cli@latest debug-files upload --include-sources ^
+    -o daanish -p 4511585577992192 ^
+    <span class="str">"build/http_server.exe"</span> <span class="str">"sentry-native/build/libsentry.dll"</span></code></pre>
+
+<h4>Expected output</h4>
+<pre><code>&gt; Found 1 debug information file
+&gt; Resolved source code for 1 debug information file
+&gt; Uploaded 2 missing debug information files
+  UPLOADED 7e8f49de-...-1 (http_server.exe; x86_64 executable)
+  UPLOADED 7e8f49de-...-1 (http_server.exe; x86_64 sources)</code></pre>
+
+<div class="ok"><b><code>--include-sources</code> is what makes the actual code lines appear</b> in the stack trace
+(it bundles your <code>.cpp/.hpp</code> files keyed to the debug-id). Without it you get function:line but no code snippet.</div>
+
+<h4>5.3 — Verify</h4>
+<pre><code>npx @sentry/cli@latest debug-files check <span class="str">"build/http_server.exe"</span>
+<span class="cmt"># Look for:  Debug ID: ...   Usable: yes
+# The Debug ID must match what you uploaded (and the binary that actually runs).</span></code></pre>
+
+<div class="crit"><b>Re-upload after EVERY rebuild.</b> The debug-id changes on each compile; an event from a new
+binary won't match an old upload, and you'll silently fall back to blank traces. Automate it with the
+CMake <code>SENTRY_UPLOAD_SYMBOLS</code> option from Step 2, or just rerun 5.2.</div>
+
+<!-- ============================ 8 ============================ -->
+<h2>8 · Step 6 — Session Replay (the "video")</h2>
+<div class="crit"><b>Replay is browser-only.</b> The Native SDK cannot record a session. A replay attaches only to
+errors the <b>browser</b> reports — a backend C++ error will <b>never</b> show a video. To get a replay tied to an
+error, the browser page must (a) load the Sentry Browser SDK and (b) capture the error itself.</div>
+
+<p>In the HTML page your server serves, load the <b>single combined bundle</b> and init:</p>
+<pre><code><span class="cmt">&lt;!-- ONE bundle: core + tracing + replay. Loading bundle.min.js and</span>
+<span class="cmt">     replay.min.js separately can leave Sentry.replayIntegration undefined,</span>
+<span class="cmt">     which makes Sentry.init() throw and silently disables everything. --&gt;</span>
+<span class="kw">&lt;script</span> src=<span class="str">"https://browser.sentry-cdn.com/8.9.0/bundle.tracing.replay.min.js"</span> crossorigin=<span class="str">"anonymous"</span><span class="kw">&gt;&lt;/script&gt;</span>
+<span class="kw">&lt;script&gt;</span>
+  Sentry.init({
+    dsn: <span class="str">"&lt;same DSN as the backend&gt;"</span>,
+    integrations: [ Sentry.browserTracingIntegration(), Sentry.replayIntegration({maskAllText:false, blockAllMedia:false}) ],
+    tracesSampleRate: 1.0,
+    replaysSessionSampleRate: 1.0,  <span class="cmt">// record 100% of sessions (the video)</span>
+    replaysOnErrorSampleRate: 1.0,
+  });
+<span class="kw">&lt;/script&gt;</span></code></pre>
+
+<p>Then, where the user acts, report from the browser so the active replay links to it:</p>
+<pre><code>Sentry.captureException(<span class="kw">new</span> Error(isOn ? <span class="str">'Tog on'</span> : <span class="str">'Tog off'</span>));</code></pre>
+<p class="small">View replays under Sentry's <b>Replays</b> tab (sidebar), or on a browser issue's <b>Replays</b> section.
+Disable ad-blockers/Brave shields for <code>localhost</code> or the replay never sends.</p>
+
+<!-- ============================ 9 ============================ -->
+<h2>9 · Step 7 — Verify end-to-end</h2>
+<p>Handy test routes (one per event kind) and what each should produce in Sentry:</p>
+<table>
+  <tr><th>Trigger</th><th>Code</th><th>Expect in Sentry</th></tr>
+  <tr><td><code>/sentry-crash</code></td><td><code>*ptr = 42;</code> (null write)</td>
+      <td>Fatal · AccessViolation; top in-app frame = the exact <code>*ptr = 42</code> line.
+          <span class="small">(Process dies — restart to flush.)</span></td></tr>
+  <tr><td><code>/sentry-exception</code></td><td><code>throw std::runtime_error(...)</code></td><td>Error, caught &amp; reported with the throw-site stack.</td></tr>
+  <tr><td>Manual event</td><td>exception/message + attached stack</td><td>Error with your type:value and a symbolicated trace.</td></tr>
+  <tr><td>Browser action</td><td><code>Sentry.captureException</code></td><td>Browser error <b>with a Replay video</b> attached.</td></tr>
+</table>
+<div class="ok"><b>Success looks like:</b> the top frame reads e.g. <code>operator() (main.cpp:164)</code> and expanding it
+shows your source with the faulting line highlighted. If the line is right and the code shows — both halves work.</div>
+<div class="warn"><b>Run exactly one instance</b> of the server. Extra copies fail to bind the port, crash on the bind
+error, and flood Sentry with noise.</div>
+
+<!-- ============================ 10 ============================ -->
+<h2>10 · Troubleshooting matrix (the gotchas)</h2>
+<table>
+  <tr><th>Symptom</th><th>Root cause</th><th>Fix</th></tr>
+  <tr><td>Issue appears but trace is blank / <code>&lt;unknown&gt; +0xNNN</code></td>
+      <td>Debug files not uploaded for this binary</td><td>Run Step 5 upload; verify with <code>debug-files check</code>.</td></tr>
+  <tr><td>Trace shows <code>fn (file:line)</code> but no code snippet</td>
+      <td>Uploaded without sources</td><td>Re-upload with <code>--include-sources</code>.</td></tr>
+  <tr><td>Wrong line highlighted / frames point at unrelated code</td>
+      <td>Optimization (<code>-O2/-O3</code>) inlined &amp; reordered</td><td>Build with <code>-O0 -g</code>; re-upload.</td></tr>
+  <tr><td>Event shows <i>"(No error message)"</i>, no frames</td>
+      <td>Message event with no stack attached</td><td>Attach <code>new_stacktrace</code> via thread/exception, or send an exception event.</td></tr>
+  <tr><td>Trace points at the Sentry call line, not the real context</td>
+      <td>Stack captured after building the event</td><td>Call <code>sentry_value_new_stacktrace()</code> <b>first</b>, then attach.</td></tr>
+  <tr><td>Symbols worked yesterday, blank today</td><td>Rebuilt → new debug-id</td><td>Re-upload after every build (automate it).</td></tr>
+  <tr><td>No "video" on the error</td><td>Backend error, or browser SDK not initialised</td>
+      <td>Replay is browser-only: use the combined bundle &amp; <code>Sentry.captureException</code> in the page.</td></tr>
+  <tr><td>App won't start / no events at all</td><td><code>libsentry.dll</code> not found</td><td>Copy the DLL next to the <code>.exe</code> or add to <code>PATH</code>.</td></tr>
+  <tr><td><code>cannot open output file ...exe: Permission denied</code> (link)</td>
+      <td>The app is still running and locks the exe</td><td>Stop all instances before rebuilding.</td></tr>
+  <tr><td>403 when listing projects with the token</td><td><code>org:ci</code> can upload but not read</td>
+      <td>Normal — use the numeric project id with <code>-p</code>; upload still works.</td></tr>
+</table>
+
+<!-- ============================ 11 ============================ -->
+<h2>11 · Security &amp; housekeeping</h2>
+<ul>
+  <li><b>Never commit the auth token.</b> Keep it in an env var / secret store. If it leaks, <b>rotate it</b>
+      (Sentry → Settings → Auth Tokens → revoke).</li>
+  <li>The <b>DSN is not a strong secret</b> (it ships in the browser anyway), but env-var it for cleanliness.</li>
+  <li><code>.gitignore</code> at least: <code>build/</code>, <code>.sentry-native/</code>, any <code>*.src.zip</code>.</li>
+  <li>Keep <code>sentry_options_set_debug(1)</code> on while wiring up, then turn it off for production.</li>
+</ul>
+
+<!-- ============================ 12 ============================ -->
+<h2>12 · Optional — link stack frames to your GitHub repo</h2>
+<p>To get "Open in GitHub" links that jump to the exact file/line/commit (Sentry "Stack Trace Linking" +
+"Suspect Commits"):</p>
+<ol>
+  <li>Put the project on GitHub (<code>git init</code> → commit → push).</li>
+  <li>Sentry → <b>Settings → Integrations → GitHub</b> → install, then add the repository.</li>
+  <li>Project → <b>Stack Trace Linking</b> (Code Mappings): map the stack-trace path root
+      (e.g. <code>C:\path\to\project\</code>) → the repo source root → repo + default branch.</li>
+  <li>Associate releases with commits so links resolve to the right SHA:
+      <pre><code>npx @sentry/cli releases new <span class="str">"my-project-name@2.3.12"</span>
+npx @sentry/cli releases set-commits <span class="str">"my-project-name@2.3.12"</span> --auto
+npx @sentry/cli releases finalize <span class="str">"my-project-name@2.3.12"</span></code></pre>
+  </li>
+</ol>
+<p class="small">Use the <b>same</b> release string here as in <code>sentry_options_set_release(...)</code>.</p>
+
+<!-- ============================ APPENDIX A ============================ -->
+<h2>Appendix A — Command cheat sheet</h2>
+<pre><code><span class="cmt"># 1) Build the SDK (once)</span>
+cmake -S sentry-native -B sentry-native/build -G "MinGW Makefiles" -DSENTRY_BACKEND=inproc -DSENTRY_BUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+cmake --build sentry-native/build --parallel
+
+<span class="cmt"># 2) Configure + build your app (debug info, no optimization)</span>
+cmake -S . -B build -G "MinGW Makefiles"
+cmake --build build
+
+<span class="cmt"># 3) Upload symbols + sources (RE-RUN AFTER EVERY BUILD)</span>
+$env:SENTRY_AUTH_TOKEN = "&lt;token&gt;"
+npx --yes @sentry/cli@latest debug-files upload --include-sources -o &lt;org&gt; -p &lt;project-id&gt; "build/http_server.exe" "sentry-native/build/libsentry.dll"
+
+<span class="cmt"># 3b) Or build + auto-upload in one shot</span>
+$env:SENTRY_AUTH_TOKEN="&lt;token&gt;"; $env:SENTRY_ORG="&lt;org&gt;"; $env:SENTRY_PROJECT="&lt;project-id&gt;"
+cmake -S . -B build -DSENTRY_UPLOAD_SYMBOLS=ON ; cmake --build build
+
+<span class="cmt"># 4) Verify a binary's debug-id</span>
+npx @sentry/cli@latest debug-files check "build/http_server.exe"
+
+<span class="cmt"># 5) Run (one instance, from project root so it finds static/ and writes .sentry-native/)</span>
+build/http_server.exe</code></pre>
+
+<!-- ============================ APPENDIX B ============================ -->
+<h2>Appendix B — Final file listings (reference project)</h2>
+
+<h3>CMakeLists.txt (key parts)</h3>
+<pre><code>cmake_minimum_required(VERSION 3.14)
+project(http_server CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include_directories(include)
+include_directories(sentry-native/include)
+link_directories(${CMAKE_SOURCE_DIR}/sentry-native/build)
+
+add_executable(http_server ${SOURCES})
+
+if(WIN32)
+    target_link_libraries(http_server ws2_32 sentry)
+else()
+    find_package(Threads REQUIRED)
+    target_link_libraries(http_server Threads::Threads sentry)
+endif()
+
+target_compile_options(http_server PRIVATE -Wall -Wextra -Wpedantic -g -O0)
+target_link_options(http_server PRIVATE -Wl,--build-id)
+
+option(SENTRY_UPLOAD_SYMBOLS "Upload DIFs to Sentry after build" OFF)
+<span class="cmt"># ... POST_BUILD sentry-cli block (see §4) ...</span></code></pre>
+
+<h3>sentry.cpp</h3>
+<pre><code>#include &lt;sentry.h&gt;
+void sentry_func(void) {
+    sentry_options_t *options = sentry_options_new();
+    sentry_options_set_dsn(options, "&lt;YOUR DSN&gt;");
+    sentry_options_set_database_path(options, ".sentry-native");
+    sentry_options_set_release(options, "my-project-name@2.3.12");
+    sentry_options_set_debug(options, 1);
+    sentry_init(options);
+}</code></pre>
+
+<p class="small" style="margin-top:14pt">— End of manual. Generated from the <code>sentryc++</code> reference project. Replace all
+example identifiers (DSN, org <code>daanish</code>, project <code>4511585577992192</code>, release
+<code>my-project-name@2.3.12</code>) with your own.</p>
+
+</body>
+</html>

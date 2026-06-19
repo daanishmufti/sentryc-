@@ -165,6 +165,13 @@ int main() {
         return HttpResponse{}.set_body("This line will never be reached.\n");
     });
 
+    router.get("/sentry-crash2", [](const HttpRequest&) -> HttpResponse {
+        volatile int a = 42;
+        volatile int b = 0;
+        int c = a / b; // This will trigger EXCEPTION_INT_DIVIDE_BY_ZERO
+        return HttpResponse{}.set_body("Result: " + std::to_string(c));
+    });
+
     router.get("/sentry-exception", [](const HttpRequest&) -> HttpResponse {
         throw std::runtime_error("This is an unhandled C++ runtime exception thrown from a route handler!");
     });

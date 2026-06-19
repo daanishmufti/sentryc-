@@ -35,7 +35,11 @@ endif()
 if(MSVC)
     target_compile_options(http_server PRIVATE /W4)
 else()
-    target_compile_options(http_server PRIVATE -Wall -Wextra -Wpedantic -g)
+    # -O0: no optimization so stack frames/line numbers map to the EXACT source
+    # line that faulted (with -O2/-O3 the compiler inlines & reorders, which makes
+    # Sentry point at the wrong line, e.g. the crash line is misattributed).
+    # -g: emit debug info.  The trailing -O0 wins over any build-type -O2/-O3.
+    target_compile_options(http_server PRIVATE -Wall -Wextra -Wpedantic -g -O0)
     target_link_options(http_server PRIVATE -Wl,--build-id)
 endif()
 
