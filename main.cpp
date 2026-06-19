@@ -129,15 +129,15 @@ int main() {
         
         
         bool is_on = toggle_state.load();
-        // Report the toggle as a Sentry ERROR (exception event) rather than a
-        // plain message. An exception carries a type + value and an attached
-        // stack trace, so it surfaces as a proper error with the code location.
+        // Capture stack BEFORE building the sentry event so it reflects
+        // the actual toggle handler context, not the Sentry SDK call site.
+        sentry_value_t stacktrace = sentry_value_new_stacktrace(nullptr, 0);
         sentry_value_t event = sentry_value_new_event();
         sentry_value_t exc = sentry_value_new_exception(
             is_on ? "Tog on" : "Tog off",
             is_on ? "Toggle switched ON" : "Toggle switched OFF"
         );
-        sentry_value_set_stacktrace(exc, nullptr, 0);  // attach current call stack
+        sentry_value_set_by_key(exc, "stacktrace", stacktrace);  // attach pre-captured stack
         sentry_event_add_exception(event, exc);
         sentry_capture_event(event);
 
