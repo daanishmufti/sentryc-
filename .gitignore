@@ -1,0 +1,22 @@
+# Build output
+build/
+
+# Sentry SDK (large third-party library, not your code)
+sentry-native/
+
+# Sentry local crash database
+.sentry-native/
+
+# Binaries
+*.exe
+*.dll
+*.obj
+*.o
+
+# Env / secrets
+.env
+
+# IDE / OS
+.vs/
+*.user
+Thumbs.db

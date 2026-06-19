@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>C++ HTTP Server</title>
+  <!-- Sentry Browser SDK — ONE bundle that includes Tracing + Session Replay.
+       (Loading bundle.min.js + replay.min.js separately can leave
+        Sentry.replayIntegration undefined, which makes init() throw.) -->
+  <script src="https://browser.sentry-cdn.com/8.9.0/bundle.tracing.replay.min.js" crossorigin="anonymous"></script>
+  <script>
+    Sentry.init({
+      dsn: "https://6735680d32229bf117eae898ec453550@o4511568474079232.ingest.us.sentry.io/4511585577992192",
+      integrations: [
+        Sentry.browserTracingIntegration(),
+        Sentry.replayIntegration({
+          maskAllText: false,
+          blockAllMedia: false,
+        }),
+      ],
+      tracesSampleRate: 1.0,
+      replaysSessionSampleRate: 1.0, // record every session (the "video")
+      replaysOnErrorSampleRate: 1.0, // always keep a replay when an error happens
+    });
+  </script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0f0f17;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #e0e0f0;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 48px 56px;
+      text-align: center;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+      max-width: 560px;
+    }
+
+    .badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #a5b4fc, #c4b5fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 12px;
+    }
+
+    p {
+      color: #9ca3af;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    .routes {
+      text-align: left;
+      margin-bottom: 32px;
+    }
+
+    .routes h2 {
+      font-size: 0.85rem;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .route {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+    }
+
+    .method {
+      font-weight: 700;
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    .get {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+    }
+
+    .post {
+      background: rgba(251, 146, 60, 0.2);
+      color: #fb923c;
+    }
+
+    .path {
+      color: #a5b4fc;
+      font-family: monospace;
+    }
+
+    .desc {
+      color: #6b7280;
+      font-size: 0.8rem;
+      margin-left: auto;
+    }
+
+    .footer {
+      color: #4b5563;
+      font-size: 0.78rem;
+    }
+
+    .toggle-section {
+      margin-bottom: 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .toggle-label {
+      font-size: 0.85rem;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .toggle-btn {
+      position: relative;
+      width: 72px;
+      height: 36px;
+      background: #1f2937;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.3s ease, box-shadow 0.3s ease;
+      outline: none;
+    }
+
+    .toggle-btn::after {
+      content: '';
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 26px;
+      height: 26px;
+      background: #4b5563;
+      border-radius: 50%;
+      transition: transform 0.3s ease, background 0.3s ease;
+    }
+
+    .toggle-btn.on {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      box-shadow: 0 0 16px rgba(139, 92, 246, 0.5);
+      border-color: transparent;
+    }
+
+    .toggle-btn.on::after {
+      transform: translateX(36px);
+      background: #fff;
+    }
+
+    .toggle-state {
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #4b5563;
+      transition: color 0.3s ease;
+    }
+
+    .toggle-state.on {
+      color: #a5b4fc;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <div class="badge">C++17 &bull; Raw Sockets &bull; No Dependencies</div>
+    <h1>HTTP Server</h1>
+    <p>A lightweight HTTP/1.1 server built from scratch in C++, with a thread pool and a fluent routing API.</p>
+
+    <div class="routes">
+      <h2>Available Routes</h2>
+      <div class="route">
+        <span class="method get">GET</span>
+        <span class="path">/</span>
+        <span class="desc">This page</span>
+      </div>
+      <div class="route">
+        <span class="method get">GET</span>
+        <span class="path">/hello</span>
+        <span class="desc">Plain text greeting</span>
+      </div>
+      <div class="route">
+        <span class="method post">POST</span>
+        <span class="path">/echo</span>
+        <span class="desc">JSON echo of request body</span>
+      </div>
+    </div>
+
+    <div class="toggle-section">
+      <div class="toggle-label">Toggle</div>
+      <button class="toggle-btn" id="toggleBtn" onclick="handleToggle()"></button>
+      <div class="toggle-state" id="toggleState">OFF</div>
+    </div>
+
+    <div class="footer">Built with &#x2665; in C++17 &mdash; no frameworks, no dependencies.</div>
+  </div>
+
+  <script>
+    async function handleToggle() {
+      const res = await fetch('/api/toggle', { method: 'POST' });
+      const data = await res.json();
+      const isOn = data.state === 'on';
+
+      document.getElementById('toggleBtn').classList.toggle('on', isOn);
+      const stateEl = document.getElementById('toggleState');
+      stateEl.textContent = isOn ? 'ON' : 'OFF';
+      stateEl.classList.toggle('on', isOn);
+
+      // Report the toggle from the BROWSER. A Session Replay is active, so this
+      // error carries a replay_id — its Sentry issue will show the replay video.
+      Sentry.captureException(new Error(isOn ? 'Tog on' : 'Tog off'));
+    }
+  </script>
+</body>
+
+</html>
